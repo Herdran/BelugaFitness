@@ -10,6 +10,12 @@ import android.content.pm.PackageManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import org.opencv.android.CameraActivity
+import org.opencv.core.Core
+import org.opencv.core.Core.absdiff
+import org.opencv.core.MatOfPoint
+import org.opencv.core.Rect
+import org.opencv.core.Scalar
+import org.opencv.imgproc.Imgproc
 import java.util.Collections
 
 
@@ -17,7 +23,13 @@ class MainActivity : CameraActivity(), CameraBridgeViewBase.CvCameraViewListener
 
     private lateinit var cameraView: CameraBridgeViewBase
     private var matInput: Mat? = null
-
+    private var currFrame: Mat? = null
+    private var prevFrame: Mat? = null
+    private var diff: Mat? = null
+    // private lateinit var rgbFrame: Mat
+    private var init: Boolean? = false
+    private var cnts: MutableList<MatOfPoint> = mutableListOf()
+    private var movement_threshold: Double = 65.0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,6 +50,7 @@ class MainActivity : CameraActivity(), CameraBridgeViewBase.CvCameraViewListener
         cameraView.visibility = CameraBridgeViewBase.VISIBLE
         cameraView.setCameraIndex(CameraBridgeViewBase.CAMERA_ID_FRONT) // Use front camera
         cameraView.setCvCameraViewListener(this)
+        init = false
 
         if (OpenCVLoader.initDebug()){
             cameraView.enableView()
@@ -74,15 +87,38 @@ class MainActivity : CameraActivity(), CameraBridgeViewBase.CvCameraViewListener
 
 
     override fun onCameraViewStarted(width: Int, height: Int) {
+        currFrame = Mat()
+        prevFrame = Mat()
+        diff = Mat()
+        //rgbFrame = Mat()
     }
 
     override fun onCameraViewStopped() {
     }
 
     override fun onCameraFrame(inputFrame: CameraBridgeViewBase.CvCameraViewFrame?): Mat {
-        matInput = inputFrame?.rgba() // Get the current frame in RGBA format
         // You can process the frame here if needed
-        return matInput ?: Mat() // Return the frame to be displayed
+        if(!init!!){
+            prevFrame = inputFrame?.gray()
+            init = true
+            return prevFrame ?: Mat()
+        }
+        matInput = inputFrame?.rgba()
+        currFrame = inputFrame?.gray()
+
+        absdiff(currFrame, prevFrame, diff)
+        Imgproc.threshold(diff, diff, movement_threshold, 255.0, Imgproc.THRESH_BINARY)
+        Imgproc.findContours(diff, cnts, Mat(), Imgproc.RETR_TREE, Imgproc.CHAIN_APPROX_SIMPLE)
+        Imgproc.drawContours(matInput, cnts, -1, Scalar(255.0, 0.0, 0.0), 5)
+
+        for(m in cnts){
+            var rectangle = Imgproc.boundingRect(m)
+            Imgproc.rectangle(matInput, rectangle, Scalar(0.0,0.0, 255.0), 3)
+        }
+        prevFrame = currFrame?.clone()
+        cnts.clear()
+
+        return matInput ?: Mat()// Return the frame to be displayed
     }
 
     override fun getCameraViewList(): MutableList<out CameraBridgeViewBase> {
