@@ -98,12 +98,12 @@ class MainActivity : CameraActivity(), CameraBridgeViewBase.CvCameraViewListener
 
     override fun onCameraFrame(inputFrame: CameraBridgeViewBase.CvCameraViewFrame?): Mat {
         // You can process the frame here if needed
+        matInput = inputFrame?.rgba()
         if(!init!!){
             prevFrame = inputFrame?.gray()
             init = true
-            return prevFrame ?: Mat()
+            return matInput ?: Mat()
         }
-        matInput = inputFrame?.rgba()
         currFrame = inputFrame?.gray()
 
         absdiff(currFrame, prevFrame, diff)
