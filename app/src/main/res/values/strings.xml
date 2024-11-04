@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Beluga Fitness</string>
+    <string name="pick_image">Pick Image</string>
+    <string name="my_image">My Image</string>
 </resources>

@@ -1,127 +1,103 @@
 package com.example.belugafitness
 
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
+import android.net.Uri
 import android.os.Bundle
-import android.Manifest
-import android.widget.Toast
-import org.opencv.android.CameraBridgeViewBase
-import org.opencv.android.OpenCVLoader
-import org.opencv.core.Mat
-import android.content.pm.PackageManager
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import org.opencv.android.CameraActivity
-import org.opencv.core.Core
-import org.opencv.core.Core.absdiff
-import org.opencv.core.MatOfPoint
-import org.opencv.core.Rect
-import org.opencv.core.Scalar
-import org.opencv.imgproc.Imgproc
-import java.util.Collections
+import android.widget.Button
+import android.widget.ImageView
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import coil.load
+import com.google.mediapipe.examples.poselandmarker.OverlayView
+import com.google.mediapipe.framework.image.BitmapImageBuilder
+import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.vision.core.RunningMode
+import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var overlayView: OverlayView
+    private lateinit var button: Button
+    private lateinit var imageView: ImageView
 
 
-class MainActivity : CameraActivity(), CameraBridgeViewBase.CvCameraViewListener2 {
+    private val baseOptionsBuilder =
+        BaseOptions.builder().setModelAssetPath("assets/pose_landmarker_full.task")
 
-    private lateinit var cameraView: CameraBridgeViewBase
-    private var matInput: Mat? = null
-    private var currFrame: Mat? = null
-    private var prevFrame: Mat? = null
-    private var diff: Mat? = null
-    // private lateinit var rgbFrame: Mat
-    private var init: Boolean? = false
-    private var cnts: MutableList<MatOfPoint> = mutableListOf()
-    private var movement_threshold: Double = 65.0
+    private val optionsBuilder =
+        PoseLandmarker.PoseLandmarkerOptions.builder()
+            .setBaseOptions(baseOptionsBuilder.build())
+            .setMinPoseDetectionConfidence(0.5f)
+            .setMinPosePresenceConfidence(0.5f)
+            .setMinTrackingConfidence(0.5f)
+            .setNumPoses(1)
+            .setRunningMode(RunningMode.IMAGE)
+    private val options = optionsBuilder.build()
+
+    private var poseLandmarker: PoseLandmarker? = null
+
+    private val getContent =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+
+            lifecycleScope.launch {
+                withContext(Dispatchers.IO) {
+                    uri?.let { mediaUri ->
+
+                        val source = ImageDecoder.createSource(
+                            contentResolver, mediaUri
+                        )
+                        ImageDecoder.decodeBitmap(source)
+                            .copy(Bitmap.Config.ARGB_8888, false)?.let { bitmap ->
+
+                                val mpImage = BitmapImageBuilder(bitmap.scaleDown(512f)).build()
+
+                                val result = poseLandmarker?.detect(mpImage)
+
+                                result?.let {
+                                    overlayView.setResults(
+                                        it, mpImage.height,
+                                        mpImage.width
+                                    )
+                                }
+                                withContext(Dispatchers.Main) {
+                                    imageView.load(bitmap)
+                                }
+                            }
+                    }
+                }
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         setContentView(R.layout.activity_main)
 
+        poseLandmarker = PoseLandmarker.createFromOptions(this, options)
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(
-                this, arrayOf(Manifest.permission.CAMERA), 1
-            )
-        }
+        overlayView = findViewById(R.id.overlay)
+        button = findViewById(R.id.pick_image)
+        imageView = findViewById(R.id.image_view)
 
-
-        // Initialize the camera view
-        cameraView = findViewById(R.id.cameraView)
-        cameraView.visibility = CameraBridgeViewBase.VISIBLE
-        cameraView.setCameraIndex(CameraBridgeViewBase.CAMERA_ID_FRONT) // Use front camera
-        cameraView.setCvCameraViewListener(this)
-        init = false
-
-        if (OpenCVLoader.initDebug()){
-            cameraView.enableView()
-        }
-
-    }
-
-    override fun onResume() {
-        super.onResume()
-        if (OpenCVLoader.initDebug()) {
-            try {
-                cameraView.enableView() // Enable the camera view
-            } catch (e: Exception) {
-                Toast.makeText(this, "Failed to enable camera view: ${e.message}", Toast.LENGTH_LONG).show()
-            }
-        } else {
-            Toast.makeText(this, "OpenCV initialization failed!", Toast.LENGTH_SHORT).show()
+        button.setOnClickListener {
+            getContent.launch(arrayOf("image/*"))
         }
     }
 
-    override fun onPause() {
-        super.onPause()
-        if (::cameraView.isInitialized) {
-            cameraView.disableView()
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        if (::cameraView.isInitialized) {
-            cameraView.disableView()
-        }
-    }
-
-
-    override fun onCameraViewStarted(width: Int, height: Int) {
-        currFrame = Mat()
-        prevFrame = Mat()
-        diff = Mat()
-        //rgbFrame = Mat()
-    }
-
-    override fun onCameraViewStopped() {
-    }
-
-    override fun onCameraFrame(inputFrame: CameraBridgeViewBase.CvCameraViewFrame?): Mat {
-        // You can process the frame here if needed
-        matInput = inputFrame?.rgba()
-        if(!init!!){
-            prevFrame = inputFrame?.gray()
-            init = true
-            return matInput ?: Mat()
-        }
-        currFrame = inputFrame?.gray()
-
-        absdiff(currFrame, prevFrame, diff)
-        Imgproc.threshold(diff, diff, movement_threshold, 255.0, Imgproc.THRESH_BINARY)
-        Imgproc.findContours(diff, cnts, Mat(), Imgproc.RETR_TREE, Imgproc.CHAIN_APPROX_SIMPLE)
-        Imgproc.drawContours(matInput, cnts, -1, Scalar(255.0, 0.0, 0.0), 5)
-
-        for(m in cnts){
-            var rectangle = Imgproc.boundingRect(m)
-            Imgproc.rectangle(matInput, rectangle, Scalar(0.0,0.0, 255.0), 3)
-        }
-        prevFrame = currFrame?.clone()
-        cnts.clear()
-
-        return matInput ?: Mat()// Return the frame to be displayed
-    }
-
-    override fun getCameraViewList(): MutableList<out CameraBridgeViewBase> {
-        return Collections.singletonList(cameraView)
+    private fun Bitmap.scaleDown(targetWidth: Float): Bitmap {
+        if (targetWidth >= width) return this
+        val scaleFactor = targetWidth / width
+        return Bitmap.createScaledBitmap(
+            this,
+            (width * scaleFactor).toInt(),
+            (height * scaleFactor).toInt(),
+            false
+        )
     }
 }

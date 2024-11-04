@@ -37,9 +37,6 @@ android {
     buildFeatures {
         compose = true
     }
-//    composeOptions {
-//        kotlinCompilerExtensionVersion = "1.9.22"
-//    }
     buildToolsVersion = "34.0.0"
 }
 
@@ -55,6 +52,8 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(project(":opencv"))
     implementation(libs.androidx.constraintlayout)
+    implementation(libs.tasks.vision)
+    implementation(libs.coil)
     implementation(libs.androidx.appcompat)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
