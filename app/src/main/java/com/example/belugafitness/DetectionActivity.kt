@@ -48,7 +48,6 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
     private var imageAnalyzer: ImageAnalysis? = null
 
     private var currentDelegate: Int = PoseLandmarkerHelper.DELEGATE_CPU
-//    private var currentThreshold: Float = PoseLandmarkerHelper.THRESHOLD_DEFAULT
 
 
     private val activityResultLauncher =
@@ -67,7 +66,8 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
                     "Permission request denied",
                     Toast.LENGTH_SHORT
                 ).show()
-            } else {
+            }
+            else {
                 startCamera()
             }
         }
@@ -89,34 +89,31 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
             takePhoto()
         }
 
+        poseLandmarkerHelper =
+            PoseLandmarkerHelper(
+                context = this,
+                minPosePresenceConfidence = 0.8f,
+                minPoseDetectionConfidence = 0.8f,
+                minPoseTrackingConfidence = 0.8f,
+                currentDelegate = currentDelegate,
+                poseLandmarkerHelperListener = this,
+                runningMode = RunningMode.LIVE_STREAM
+            )
+
         cameraExecutor.execute {
-            poseLandmarkerHelper =
-                PoseLandmarkerHelper(
-                    context = this,
-                    minPosePresenceConfidence = 0.8f,
-                    minPoseDetectionConfidence = 0.8f,
-                    minPoseTrackingConfidence = 0.8f,
-                    currentDelegate = currentDelegate,
-                    poseLandmarkerHelperListener = this,
-                    runningMode = RunningMode.LIVE_STREAM
-                )
+            poseLandmarkerHelper
         }
 
-//        if (allPermissionsGranted()) {
-//            startCamera()
-//        } else {
-//            requestPermissions()
-//        }
-    }
-
-
-    override fun onResume() {
-        super.onResume()
         if (allPermissionsGranted()) {
             startCamera()
         } else {
             requestPermissions()
         }
+    }
+
+
+    override fun onResume() {
+        super.onResume()
 
         cameraExecutor.execute {
             if (poseLandmarkerHelper.isClose()) {
@@ -129,7 +126,6 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
         super.onPause()
         if (this::poseLandmarkerHelper.isInitialized) {
             currentDelegate = poseLandmarkerHelper.currentDelegate
-//            currentThreshold = poseLandmarkerHelper.threshold
             cameraExecutor.execute { poseLandmarkerHelper.clearPoseLandmarker() }
         }
     }
@@ -142,9 +138,7 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraX-image")
-            }
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraX-image")
         }
 
         val outputOptions = ImageCapture.OutputFileOptions
@@ -205,14 +199,15 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
                     .also {
                         if (this::poseLandmarkerHelper.isInitialized) {
                             it.setAnalyzer(
-                                cameraExecutor,
-                                poseLandmarkerHelper::detectLiveStream
-                            )
+                                cameraExecutor
+                            ) { imageProxy ->
+                                poseLandmarkerHelper.detectLiveStream(imageProxy, isFrontCamera = true)
+                            }
                         }
                     }
 
-            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-//            val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
+//            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+            val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
 
             try {
                 cameraProvider.unbindAll()
@@ -260,9 +255,6 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
             mutableListOf(
                 android.Manifest.permission.CAMERA
             ).apply {
-                if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-                    add(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                }
             }.toTypedArray()
     }
 
@@ -292,6 +284,4 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
 //            }
         }
     }
-
-
 }

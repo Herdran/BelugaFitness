@@ -152,7 +152,7 @@ class PoseLandmarkerHelper(
     // Convert the ImageProxy to MP Image and feed it to PoselandmakerHelper.
     fun detectLiveStream(
         imageProxy: ImageProxy,
-//        isFrontCamera: Boolean TODO to re-enable
+        isFrontCamera: Boolean
     ) {
         if (runningMode != RunningMode.LIVE_STREAM) {
             throw IllegalArgumentException(
@@ -178,14 +178,14 @@ class PoseLandmarkerHelper(
             postRotate(imageProxy.imageInfo.rotationDegrees.toFloat())
 
             // flip image if user use front camera
-//            if (isFrontCamera) {
-//                postScale(
-//                    -1f,
-//                    1f,
-//                    imageProxy.width.toFloat(),
-//                    imageProxy.height.toFloat()
-//                )
-//            }
+            if (isFrontCamera) {
+                postScale(
+                    -1f,
+                    1f,
+                    imageProxy.width.toFloat(),
+                    imageProxy.height.toFloat()
+                )
+            }
         }
         val rotatedBitmap = Bitmap.createBitmap(
             bitmapBuffer, 0, 0, bitmapBuffer.width, bitmapBuffer.height,
