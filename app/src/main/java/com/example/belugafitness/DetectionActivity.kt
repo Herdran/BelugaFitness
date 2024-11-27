@@ -1,5 +1,6 @@
 package com.example.belugafitness
 
+import android.Manifest
 import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -8,6 +9,8 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
 import android.widget.Button
+import android.widget.FrameLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,9 +27,11 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.example.belugafitness.obstacles.ObstacleDrawingView
 import com.example.belugafitness.posedetection.OverlayView
 import com.example.belugafitness.posedetection.PoseLandmarkerHelper
 import com.google.mediapipe.tasks.vision.core.RunningMode
+import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.ExecutorService
@@ -37,6 +42,7 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
 
     private lateinit var viewFinder: PreviewView
     private lateinit var overlayView: OverlayView
+    private lateinit var obstacleDrawingView: ObstacleDrawingView
 
     private var imageCapture: ImageCapture? = null
     private var cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -49,6 +55,9 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
 
     private var currentDelegate: Int = PoseLandmarkerHelper.DELEGATE_CPU
 
+    private val obstacleYValue: Float = 0.5f // distance of obstacle from top
+
+    private lateinit var resultTxt: TextView
 
     private val activityResultLauncher =
         registerForActivityResult(
@@ -84,10 +93,19 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
 
         viewFinder = findViewById(R.id.viewFinder)
         overlayView = findViewById(R.id.overlay)
+        resultTxt = findViewById(R.id.resultText)
 
         findViewById<Button>(R.id.image_capture_button).setOnClickListener {
             takePhoto()
         }
+
+        obstacleDrawingView = ObstacleDrawingView(
+            this, yValue = obstacleYValue,
+            attrs = null
+        )
+
+        val rootLayout = findViewById<FrameLayout>(android.R.id.content)
+        rootLayout.addView(obstacleDrawingView)
 
         poseLandmarkerHelper =
             PoseLandmarkerHelper(
@@ -253,7 +271,7 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
         private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
         private val REQUIRED_PERMISSIONS =
             mutableListOf(
-                android.Manifest.permission.CAMERA
+                Manifest.permission.CAMERA
             ).apply {
             }.toTypedArray()
     }
@@ -264,6 +282,24 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
         }
     }
 
+    fun isPoseBelowObstacle(result: PoseLandmarkerResult): Boolean {
+        var screenHeight = obstacleDrawingView.height.toFloat()
+        val obstacleY = screenHeight * obstacleYValue
+        val landmarks = result.landmarks()
+        for (landmark in landmarks) {
+            for (normalizedLandmark in landmark) {
+                var pointY = overlayView.returnScaledPointPosition(
+                    normalizedLandmark.x(),
+                    normalizedLandmark.y()
+                ).second
+                if (pointY <= obstacleY) {
+                    return false
+                }
+            }
+        }
+        return true
+    }
+
     override fun onResults(resultBundle: PoseLandmarkerHelper.ResultBundle) {
         runOnUiThread {
             overlayView.setResults(
@@ -271,6 +307,14 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
                 resultBundle.inputImageHeight,
                 resultBundle.inputImageWidth
             )
+
+            var isPoseBelowObstacle = isPoseBelowObstacle(resultBundle.results[0])
+//            resultTxt.text = "BELOW"
+            if(isPoseBelowObstacle) {
+                resultTxt.text = "BELOW"
+            }else{
+                resultTxt.text = "OVER"
+            }
 //            val detectionResult = resultBundle.results
 //            if (detectionResult.isNotEmpty()) {
 //                val detections = detectionResult[0].detections()

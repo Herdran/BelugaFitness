@@ -92,6 +92,14 @@ class OverlayView(context: Context?, attrs: AttributeSet?) :
         }
     }
 
+    fun returnScaledPointPosition(normalizedX: Float, normalizedY: Float ) : Pair<Float, Float>{
+        val horizontalOffset = (width - imageWidth * scaleFactor) / 2
+        val verticalOffset = (height - imageHeight * scaleFactor) / 2
+        var x = normalizedX * imageWidth * scaleFactor + horizontalOffset
+        var y = normalizedY * imageHeight * scaleFactor + verticalOffset
+        return Pair(x, y)
+    }
+
     fun setResults(
         poseLandmarkerResults: PoseLandmarkerResult,
         imageHeight: Int,
