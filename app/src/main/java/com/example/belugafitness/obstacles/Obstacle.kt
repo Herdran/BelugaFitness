@@ -9,8 +9,9 @@ interface Obstacle {
     fun checkCondition(
         result: PoseLandmarkerResult,
         overlayView: OverlayView,
-        obstacleDrawingViewHeight: Float
+        obstacleDrawingViewHeight: Float,
+        obstacleDrawingViewWidth: Float
     ): Boolean
 
-    fun draw(canvas: Canvas, paint: Paint, width: Float, obstacleDrawingViewHeight: Float)
+    fun draw(canvas: Canvas, paint: Paint, obstacleDrawingViewHeight: Float, obstacleDrawingViewWidth: Float)
 }

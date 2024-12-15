@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Log
+import android.view.WindowManager
+import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -22,8 +24,11 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.example.belugafitness.obstacles.HoldCircleWithHandObstacle
 import com.example.belugafitness.obstacles.Obstacle
 import com.example.belugafitness.obstacles.ObstacleDrawingView
+import com.example.belugafitness.obstacles.RectangleFromLeftObstacle
+import com.example.belugafitness.obstacles.RectangleFromRightObstacle
 import com.example.belugafitness.obstacles.RectangleFromTopObstacle
 import com.example.belugafitness.posedetection.OverlayView
 import com.example.belugafitness.posedetection.PoseLandmarkerHelper
@@ -56,6 +61,8 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
     private var countdownJob: Job? = null
     var isPoseOutsideObstacle: Boolean? = null
     private var cameraProvider: ProcessCameraProvider? = null
+    var isObstacleConditionMet: Boolean? = null
+
     private lateinit var resultTxt: TextView
     private var camera: Camera? = null
 
@@ -94,11 +101,23 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_detection)
 
         obstacles.add(RectangleFromTopObstacle(0.5f))
         obstacles.add(RectangleFromTopObstacle(0.4f))
         obstacles.add(RectangleFromTopObstacle(0.2f))
+
+        obstacles.add(RectangleFromLeftObstacle(0.4f))
+        obstacles.add(RectangleFromLeftObstacle(0.2f))
+
+        obstacles.add(RectangleFromRightObstacle(0.2f))
+        obstacles.add(RectangleFromRightObstacle(0.4f))
+
+        obstacles.add(HoldCircleWithHandObstacle(0.6f, 0.2f, 0.2f))
+        obstacles.add(HoldCircleWithHandObstacle(0.2f, 0.2f, 0.2f))
+        obstacles.add(HoldCircleWithHandObstacle(0.4f, 0.2f, 0.2f))
+        obstacles.add(HoldCircleWithHandObstacle(0.3f, 0.5f, 0.2f))
 
         viewFinder = findViewById(R.id.view_finder)
         overlayView = findViewById(R.id.overlay)
@@ -248,11 +267,12 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
                 resultBundle.inputImageWidth,
                 RunningMode.LIVE_STREAM
             )
-            isPoseOutsideObstacle = obstacleDrawingView.obstacle?.checkCondition(
-                resultBundle.results[0], overlayView, obstacleDrawingView.height.toFloat()
+
+            isObstacleConditionMet = obstacleDrawingView.obstacle?.checkCondition(
+                resultBundle.results[0], overlayView, obstacleDrawingView.height.toFloat(), obstacleDrawingView.width.toFloat()
             )
 
-            if (isPoseOutsideObstacle == true) {
+            if (isObstacleConditionMet == true) {
                 if (!isCountdownActive) {
                     resultTxt.text = "OKAY"
                     startCountdownBeforeNextObstacle()
@@ -276,7 +296,7 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
                 delay(1000)
                 countdown--
 
-                if (isPoseOutsideObstacle == false) {
+                if (isObstacleConditionMet == false) {
                     stopCountdown()
                     break
                 }

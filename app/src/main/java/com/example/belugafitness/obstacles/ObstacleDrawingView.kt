@@ -25,7 +25,8 @@ class ObstacleDrawingView @JvmOverloads constructor(
         super.onDraw(canvas)
 
         val screenHeight = height.toFloat()
+        val screenWidth = width.toFloat()
 
-        obstacle?.draw(canvas, paint, width.toFloat(), screenHeight)
+        obstacle?.draw(canvas, paint, screenHeight, screenWidth)
     }
 }
