@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.content.res.Configuration
-import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
@@ -27,11 +26,16 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.lifecycleScope
+import com.example.belugafitness.obstacles.Obstacle
 import com.example.belugafitness.obstacles.ObstacleDrawingView
+import com.example.belugafitness.obstacles.RectangleFromTopObstacle
 import com.example.belugafitness.posedetection.OverlayView
 import com.example.belugafitness.posedetection.PoseLandmarkerHelper
 import com.google.mediapipe.tasks.vision.core.RunningMode
-import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.ExecutorService
@@ -55,7 +59,11 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
 
     private var currentDelegate: Int = PoseLandmarkerHelper.DELEGATE_CPU
 
-    private val obstacleYValue: Float = 0.5f // distance of obstacle from top
+    private var obstacles: ArrayList<Obstacle> = ArrayList()
+    private var obstacleId: Int = 1
+    private var isCountdownActive: Boolean = false
+    private var countdownJob: Job? = null // To track the countdown Coroutine
+    var isPoseOutsideObstacle: Boolean? = null
 
     private lateinit var resultTxt: TextView
 
@@ -75,8 +83,7 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
                     "Permission request denied",
                     Toast.LENGTH_SHORT
                 ).show()
-            }
-            else {
+            } else {
                 startCamera()
             }
         }
@@ -91,6 +98,10 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
             insets
         }
 
+        obstacles.add(RectangleFromTopObstacle(0.5f))
+        obstacles.add(RectangleFromTopObstacle(0.4f))
+        obstacles.add(RectangleFromTopObstacle(0.2f))
+
         viewFinder = findViewById(R.id.viewFinder)
         overlayView = findViewById(R.id.overlay)
         resultTxt = findViewById(R.id.resultText)
@@ -100,9 +111,12 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
         }
 
         obstacleDrawingView = ObstacleDrawingView(
-            this, yValue = obstacleYValue,
-            attrs = null
+            this, attrs = null
         )
+
+        obstacleDrawingView.apply {
+            obstacle = obstacles[0]
+        }
 
         val rootLayout = findViewById<FrameLayout>(android.R.id.content)
         rootLayout.addView(obstacleDrawingView)
@@ -219,7 +233,10 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
                             it.setAnalyzer(
                                 cameraExecutor
                             ) { imageProxy ->
-                                poseLandmarkerHelper.detectLiveStream(imageProxy, isFrontCamera = true)
+                                poseLandmarkerHelper.detectLiveStream(
+                                    imageProxy,
+                                    isFrontCamera = true
+                                )
                             }
                         }
                     }
@@ -282,24 +299,6 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
         }
     }
 
-    fun isPoseBelowObstacle(result: PoseLandmarkerResult): Boolean {
-        var screenHeight = obstacleDrawingView.height.toFloat()
-        val obstacleY = screenHeight * obstacleYValue
-        val landmarks = result.landmarks()
-        for (landmark in landmarks) {
-            for (normalizedLandmark in landmark) {
-                var pointY = overlayView.returnScaledPointPosition(
-                    normalizedLandmark.x(),
-                    normalizedLandmark.y()
-                ).second
-                if (pointY <= obstacleY) {
-                    return false
-                }
-            }
-        }
-        return true
-    }
-
     override fun onResults(resultBundle: PoseLandmarkerHelper.ResultBundle) {
         runOnUiThread {
             overlayView.setResults(
@@ -307,25 +306,55 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
                 resultBundle.inputImageHeight,
                 resultBundle.inputImageWidth
             )
+            isPoseOutsideObstacle = obstacleDrawingView.obstacle?.checkCondition(
+                resultBundle.results[0], overlayView, obstacleDrawingView.height.toFloat()
+            )
+            Log.i("logcondition", isPoseOutsideObstacle.toString())
 
-            var isPoseBelowObstacle = isPoseBelowObstacle(resultBundle.results[0])
-//            resultTxt.text = "BELOW"
-            if(isPoseBelowObstacle) {
-                resultTxt.text = "BELOW"
-            }else{
-                resultTxt.text = "OVER"
+            if (isPoseOutsideObstacle == true) {
+                if (!isCountdownActive) {
+                    resultTxt.text = "OKAY"
+                    startCountdownBeforeNextObstacle()
+                }
+            } else {
+                resultTxt.text = "NOT OKAY"
+                if (isCountdownActive) {
+                    stopCountdown()
+                }
             }
-//            val detectionResult = resultBundle.results
-//            if (detectionResult.isNotEmpty()) {
-//                val detections = detectionResult[0].detections()
-//                if (detections.isNotEmpty()){
-//                    val categories = detections[0].categories()
-//                    if (categories.isNotEmpty()){
-//                        val category = categories[0]
-//                        Log.i("CategoryResult", "${category.categoryName()} ${category.score()} ${category.displayName()}")
-//                    }
-//                }
-//            }
         }
+    }
+
+
+    private fun startCountdownBeforeNextObstacle() {
+        isCountdownActive = true
+        countdownJob = lifecycleScope.launch {
+            var countdown = 3 // Seconds to wait
+            while (countdown > 0 && isCountdownActive) {
+                resultTxt.text = "Next in $countdown..."
+                delay(1000) // Wait for 1 second
+                countdown--
+
+                if (isPoseOutsideObstacle == false) {
+                    stopCountdown()
+                    break
+                }
+            }
+
+            // After countdown ends, switch to the next obstacle if still outside
+            if (countdown == 0 && isCountdownActive) {
+                obstacleDrawingView.obstacle = obstacles[obstacleId]
+                obstacleDrawingView.invalidate()
+                if (obstacleId < obstacles.size - 1)
+                    obstacleId++
+                resultTxt.text = "NOT OKAY" // Reset the message
+            }
+            isCountdownActive = false
+        }
+    }
+
+    private fun stopCountdown() {
+        isCountdownActive = false
+        countdownJob?.cancel() // Cancel the countdown coroutine
     }
 }
