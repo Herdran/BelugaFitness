@@ -1,31 +1,26 @@
 package com.example.belugafitness
 
 import android.Manifest
-import android.content.ContentValues
+import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Bundle
-import android.provider.MediaStore
 import android.util.Log
-import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.camera.core.AspectRatio
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
-import androidx.camera.core.resolutionselector.AspectRatioStrategy
-import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.belugafitness.obstacles.Obstacle
 import com.example.belugafitness.obstacles.ObstacleDrawingView
@@ -36,8 +31,6 @@ import com.google.mediapipe.tasks.vision.core.RunningMode
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -48,10 +41,8 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
     private lateinit var overlayView: OverlayView
     private lateinit var obstacleDrawingView: ObstacleDrawingView
 
-    private var imageCapture: ImageCapture? = null
     private var cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
-    private var pauseAnalysis = false
     private var preview: Preview? = null
 
     private lateinit var poseLandmarkerHelper: PoseLandmarkerHelper
@@ -62,10 +53,21 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
     private var obstacles: ArrayList<Obstacle> = ArrayList()
     private var obstacleId: Int = 1
     private var isCountdownActive: Boolean = false
-    private var countdownJob: Job? = null // To track the countdown Coroutine
+    private var countdownJob: Job? = null
     var isPoseOutsideObstacle: Boolean? = null
-
+    private var cameraProvider: ProcessCameraProvider? = null
     private lateinit var resultTxt: TextView
+    private var camera: Camera? = null
+
+
+    companion object {
+        private const val TAG = "CameraXApp"
+        private val REQUIRED_PERMISSIONS =
+            mutableListOf(
+                Manifest.permission.CAMERA
+            ).apply {
+            }.toTypedArray()
+    }
 
     private val activityResultLauncher =
         registerForActivityResult(
@@ -88,27 +90,19 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
             }
         }
 
+    @SuppressLint("MissingInflatedId")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContentView(R.layout.activity_detection)
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
-            insets
-        }
 
         obstacles.add(RectangleFromTopObstacle(0.5f))
         obstacles.add(RectangleFromTopObstacle(0.4f))
         obstacles.add(RectangleFromTopObstacle(0.2f))
 
-        viewFinder = findViewById(R.id.viewFinder)
+        viewFinder = findViewById(R.id.view_finder)
         overlayView = findViewById(R.id.overlay)
         resultTxt = findViewById(R.id.resultText)
-
-        findViewById<Button>(R.id.image_capture_button).setOnClickListener {
-            takePhoto()
-        }
 
         obstacleDrawingView = ObstacleDrawingView(
             this, attrs = null
@@ -124,9 +118,9 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
         poseLandmarkerHelper =
             PoseLandmarkerHelper(
                 context = this,
-                minPosePresenceConfidence = 0.8f,
-                minPoseDetectionConfidence = 0.8f,
-                minPoseTrackingConfidence = 0.8f,
+                minPosePresenceConfidence = 0.5f,
+                minPoseDetectionConfidence = 0.5f,
+                minPoseTrackingConfidence = 0.5f,
                 currentDelegate = currentDelegate,
                 poseLandmarkerHelperListener = this,
                 runningMode = RunningMode.LIVE_STREAM
@@ -162,100 +156,56 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
         }
     }
 
-    private fun takePhoto() {
-        val imageCapture = imageCapture ?: return
-        pauseAnalysis = true
-        val name = SimpleDateFormat(FILENAME_FORMAT, Locale.GERMAN)
-            .format(System.currentTimeMillis())
-        val contentValues = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraX-image")
-        }
-
-        val outputOptions = ImageCapture.OutputFileOptions
-            .Builder(
-                contentResolver,
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                contentValues
-            )
-            .build()
-
-        imageCapture.takePicture(
-            outputOptions,
-            ContextCompat.getMainExecutor(this),
-            object : ImageCapture.OnImageSavedCallback {
-                override fun onError(exception: ImageCaptureException) {
-                    Log.e(TAG, "Photo capture has failed: ${exception.message}", exception)
-                    pauseAnalysis = false
-                }
-
-                override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                    val msg = "Photo capture succeded: ${outputFileResults.savedUri}"
-                    Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
-                    Log.d(TAG, msg)
-                    pauseAnalysis = false
-                }
-            }
-        )
-    }
-
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
 
         cameraProviderFuture.addListener({
-            val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
+            cameraProvider = cameraProviderFuture.get()
 
-            val resolutionSelector = ResolutionSelector.Builder().apply {
-                setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
-            }.build()
+            val cameraProvider = cameraProvider
+                ?: throw IllegalStateException("Camera initialization failed.")
 
-            preview = Preview.Builder()
-                .setResolutionSelector(resolutionSelector)
+//            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+            val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
+
+            preview = Preview.Builder().setTargetAspectRatio(AspectRatio.RATIO_4_3)
                 .setTargetRotation(viewFinder.display.rotation)
-                .build()
-                .also {
-                    it.setSurfaceProvider(viewFinder.surfaceProvider)
-                }
-
-            imageCapture = ImageCapture.Builder()
                 .build()
 
             imageAnalyzer =
-                ImageAnalysis.Builder()
-                    .setResolutionSelector(resolutionSelector)
+                ImageAnalysis.Builder().setTargetAspectRatio(AspectRatio.RATIO_4_3)
                     .setTargetRotation(viewFinder.display.rotation)
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                     .build()
                     .also {
-                        if (this::poseLandmarkerHelper.isInitialized) {
-                            it.setAnalyzer(
-                                cameraExecutor
-                            ) { imageProxy ->
-                                poseLandmarkerHelper.detectLiveStream(
-                                    imageProxy,
-                                    isFrontCamera = true
-                                )
-                            }
+                        it.setAnalyzer(cameraExecutor) { image ->
+                            detectPose(image)
                         }
                     }
 
-//            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-            val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
+            cameraProvider.unbindAll()
 
             try {
-                cameraProvider.unbindAll()
-
-                cameraProvider.bindToLifecycle(
-                    this, cameraSelector, preview, imageCapture, imageAnalyzer
+                camera = cameraProvider.bindToLifecycle(
+                    this, cameraSelector, preview, imageAnalyzer
                 )
 
-            } catch (exception: Exception) {
-                Log.e(TAG, "Use case binding failed", exception)
+                preview?.setSurfaceProvider(viewFinder.surfaceProvider)
+            } catch (exc: Exception) {
+                Log.e(TAG, "Use case binding failed", exc)
             }
 
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun detectPose(imageProxy: ImageProxy) {
+        if (this::poseLandmarkerHelper.isInitialized) {
+            poseLandmarkerHelper.detectLiveStream(
+                imageProxy = imageProxy,
+                isFrontCamera = true
+            )
+        }
     }
 
 
@@ -283,15 +233,6 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
         )
     }
 
-    companion object {
-        private const val TAG = "CameraXApp"
-        private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
-        private val REQUIRED_PERMISSIONS =
-            mutableListOf(
-                Manifest.permission.CAMERA
-            ).apply {
-            }.toTypedArray()
-    }
 
     override fun onError(error: String, errorCode: Int) {
         runOnUiThread {
@@ -302,14 +243,14 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
     override fun onResults(resultBundle: PoseLandmarkerHelper.ResultBundle) {
         runOnUiThread {
             overlayView.setResults(
-                resultBundle.results[0],
+                resultBundle.results.first(),
                 resultBundle.inputImageHeight,
-                resultBundle.inputImageWidth
+                resultBundle.inputImageWidth,
+                RunningMode.LIVE_STREAM
             )
             isPoseOutsideObstacle = obstacleDrawingView.obstacle?.checkCondition(
                 resultBundle.results[0], overlayView, obstacleDrawingView.height.toFloat()
             )
-            Log.i("logcondition", isPoseOutsideObstacle.toString())
 
             if (isPoseOutsideObstacle == true) {
                 if (!isCountdownActive) {
@@ -329,10 +270,10 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
     private fun startCountdownBeforeNextObstacle() {
         isCountdownActive = true
         countdownJob = lifecycleScope.launch {
-            var countdown = 3 // Seconds to wait
+            var countdown = 3
             while (countdown > 0 && isCountdownActive) {
                 resultTxt.text = "Next in $countdown..."
-                delay(1000) // Wait for 1 second
+                delay(1000)
                 countdown--
 
                 if (isPoseOutsideObstacle == false) {
@@ -341,13 +282,12 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
                 }
             }
 
-            // After countdown ends, switch to the next obstacle if still outside
             if (countdown == 0 && isCountdownActive) {
                 obstacleDrawingView.obstacle = obstacles[obstacleId]
                 obstacleDrawingView.invalidate()
                 if (obstacleId < obstacles.size - 1)
                     obstacleId++
-                resultTxt.text = "NOT OKAY" // Reset the message
+                resultTxt.text = "NOT OKAY"
             }
             isCountdownActive = false
         }
@@ -355,6 +295,6 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
 
     private fun stopCountdown() {
         isCountdownActive = false
-        countdownJob?.cancel() // Cancel the countdown coroutine
+        countdownJob?.cancel()
     }
 }
