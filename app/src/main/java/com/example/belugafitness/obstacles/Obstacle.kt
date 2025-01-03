@@ -1,5 +1,6 @@
 package com.example.belugafitness.obstacles
 
+import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import com.example.belugafitness.posedetection.OverlayView
@@ -13,5 +14,5 @@ interface Obstacle {
         obstacleDrawingViewWidth: Float
     ): Boolean
 
-    fun draw(canvas: Canvas, paint: Paint, obstacleDrawingViewHeight: Float, obstacleDrawingViewWidth: Float)
+    fun draw(canvas: Canvas, paint: Paint, obstacleDrawingViewHeight: Float, obstacleDrawingViewWidth: Float, context: Context)
 }

@@ -1,9 +1,18 @@
 package com.example.belugafitness.obstacles
 
+import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
+import android.graphics.drawable.ShapeDrawable
+import androidx.core.content.ContextCompat
+import com.example.belugafitness.R
 import com.example.belugafitness.posedetection.OverlayView
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
+import java.security.AccessController.getContext
+import kotlin.random.Random
 
 class HoldCircleWithHandObstacle(private val xValue: Float = 0.25f, private val yValue: Float = 0.25f, private val rValue: Float = 0.1f) : Obstacle {
     private val handsLandmarkIndices = listOf(
@@ -15,6 +24,13 @@ class HoldCircleWithHandObstacle(private val xValue: Float = 0.25f, private val 
         20, // right index
         21, // left thumb
         22  // right thumb
+    )
+
+    private val bubbleColors = listOf(
+        "#F8AFE3",
+        "#85E3FF",
+        "#85E3FF",
+        "#88F4E7",
     )
 
     override fun checkCondition(
@@ -52,12 +68,22 @@ class HoldCircleWithHandObstacle(private val xValue: Float = 0.25f, private val 
         canvas: Canvas,
         paint: Paint,
         obstacleDrawingViewHeight: Float,
-        obstacleDrawingViewWidth: Float
+        obstacleDrawingViewWidth: Float,
+        context: Context
     ) {
+        val bubbleDrawable = ContextCompat.getDrawable(context, R.drawable.bubble) as LayerDrawable
         val xPosition = obstacleDrawingViewWidth * xValue
         val yPosition = obstacleDrawingViewHeight * yValue
         val radius = obstacleDrawingViewWidth * rValue
 
-        canvas.drawCircle(xPosition, yPosition, radius, paint)
+        bubbleDrawable.let { drawable ->
+            val solidDrawable = drawable.getDrawable(0) as GradientDrawable
+            val newBubbleColor = Color.parseColor(bubbleColors[Random.nextInt(bubbleColors.size)])
+            solidDrawable.setColor(newBubbleColor)
+            drawable.alpha = 170
+            drawable.setBounds((xPosition-radius).toInt(), (yPosition-radius).toInt(), (xPosition + radius).toInt(), (yPosition + radius).toInt())
+            drawable.draw(canvas)
+        }
+        bubbleDrawable.draw(canvas)
     }
 }
