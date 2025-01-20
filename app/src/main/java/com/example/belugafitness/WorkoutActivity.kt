@@ -1,14 +1,13 @@
 package com.example.belugafitness
 
 import android.Manifest
-import android.annotation.SuppressLint
+import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Log
 import android.view.WindowManager
 import android.widget.Button
-import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
@@ -24,23 +23,22 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.example.belugafitness.obstacles.HoldCircleWithHandObstacle
-import com.example.belugafitness.obstacles.Obstacle
 import com.example.belugafitness.obstacles.ObstacleDrawingView
-import com.example.belugafitness.obstacles.RectangleFromLeftObstacle
-import com.example.belugafitness.obstacles.RectangleFromRightObstacle
-import com.example.belugafitness.obstacles.RectangleFromTopObstacle
+import com.example.belugafitness.obstacles.WorkoutSection
 import com.example.belugafitness.posedetection.OverlayView
 import com.example.belugafitness.posedetection.PoseLandmarkerHelper
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerListener {
+class WorkoutActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerListener {
 
     private lateinit var viewFinder: PreviewView
     private lateinit var overlayView: OverlayView
@@ -55,8 +53,7 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
 
     private var currentDelegate: Int = PoseLandmarkerHelper.DELEGATE_CPU
 
-    private var obstacles: ArrayList<Obstacle> = ArrayList()
-    private var obstacleId: Int = 1
+    private var obstacleId: Int = 0
     private var isCountdownActive: Boolean = false
     private var countdownJob: Job? = null
     var isPoseOutsideObstacle: Boolean? = null
@@ -65,6 +62,15 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
 
     private lateinit var resultTxt: TextView
     private var camera: Camera? = null
+    private var workoutSection: WorkoutSection = WorkoutSection()
+
+    private val PREFS_NAME = "StreakPrefs"
+    private val STREAK_KEY = "streak"
+    private val LAST_DATE_KEY = "lastDate"
+
+    private lateinit var streakTextView: TextView
+
+    var streak: Int = 0
 
 
     companion object {
@@ -97,42 +103,22 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
             }
         }
 
-    @SuppressLint("MissingInflatedId")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_detection)
 
-        obstacles.add(RectangleFromTopObstacle(0.5f))
-        obstacles.add(RectangleFromTopObstacle(0.4f))
-        obstacles.add(RectangleFromTopObstacle(0.2f))
-
-        obstacles.add(RectangleFromLeftObstacle(0.4f))
-        obstacles.add(RectangleFromLeftObstacle(0.2f))
-
-        obstacles.add(RectangleFromRightObstacle(0.2f))
-        obstacles.add(RectangleFromRightObstacle(0.4f))
-
-        obstacles.add(HoldCircleWithHandObstacle(0.6f, 0.2f, 0.2f))
-        obstacles.add(HoldCircleWithHandObstacle(0.2f, 0.2f, 0.2f))
-        obstacles.add(HoldCircleWithHandObstacle(0.4f, 0.2f, 0.2f))
-        obstacles.add(HoldCircleWithHandObstacle(0.3f, 0.5f, 0.2f))
-
         viewFinder = findViewById(R.id.view_finder)
         overlayView = findViewById(R.id.overlay)
+        obstacleDrawingView = findViewById(R.id.obstacleView)
         resultTxt = findViewById(R.id.resultText)
 
-        obstacleDrawingView = ObstacleDrawingView(
-            this, attrs = null
-        )
+        workoutSection.generateWorkout()
 
         obstacleDrawingView.apply {
-            obstacle = obstacles[0]
+            obstacle = workoutSection.obstaclesList[0]
         }
-
-        val rootLayout = findViewById<FrameLayout>(android.R.id.content)
-        rootLayout.addView(obstacleDrawingView)
 
         poseLandmarkerHelper =
             PoseLandmarkerHelper(
@@ -154,8 +140,9 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
         } else {
             requestPermissions()
         }
-    }
 
+        streakSetupHelper()
+    }
 
     override fun onResume() {
         super.onResume()
@@ -252,7 +239,6 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
         )
     }
 
-
     override fun onError(error: String, errorCode: Int) {
         runOnUiThread {
             Toast.makeText(this, error, Toast.LENGTH_SHORT).show()
@@ -278,7 +264,7 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
                     startCountdownBeforeNextObstacle()
                 }
             } else {
-                resultTxt.text = "NOT OKAY"
+                resultTxt.text = workoutSection.obstaclesList[obstacleId].obstacleTxt
                 if (isCountdownActive) {
                     stopCountdown()
                 }
@@ -303,11 +289,14 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
             }
 
             if (countdown == 0 && isCountdownActive) {
-                obstacleDrawingView.obstacle = obstacles[obstacleId]
                 obstacleDrawingView.invalidate()
-                if (obstacleId < obstacles.size - 1)
+                if (obstacleId < workoutSection.obstaclesList.size - 1){
                     obstacleId++
-                resultTxt.text = "NOT OKAY"
+                    obstacleDrawingView.obstacle = workoutSection.obstaclesList[obstacleId]
+                } else {
+                    workoutSummaryLayout()
+                }
+                resultTxt.text = workoutSection.obstaclesList[obstacleId].obstacleTxt
             }
             isCountdownActive = false
         }
@@ -316,5 +305,43 @@ class DetectionActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerLi
     private fun stopCountdown() {
         isCountdownActive = false
         countdownJob?.cancel()
+    }
+
+    private fun workoutSummaryLayout() {
+        stopCountdown()
+        setContentView(R.layout.workout_summary)
+        streakTextView = findViewById(R.id.streak_test_view)
+
+        val endWorkoutButton: Button = findViewById(R.id.button_ws)
+        updateStreakText()
+        endWorkoutButton.setOnClickListener {
+            val currentDate = getCurrentDate()
+            val sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+            if (currentDate != sharedPreferences.getString(LAST_DATE_KEY, "")) {
+                streak++
+                with(sharedPreferences.edit()) {
+                    putInt(STREAK_KEY, streak)
+                    putString(LAST_DATE_KEY, currentDate)
+                    apply()
+                }
+                updateStreakText()
+            }
+            finish()
+        }
+    }
+
+    fun streakSetupHelper() {
+        val sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        streak = sharedPreferences.getInt(STREAK_KEY, 0)
+    }
+
+    private fun updateStreakText() {
+        streakTextView.text = "Your current streak is: $streak days"
+    }
+
+    private fun getCurrentDate(): String {
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        return dateFormat.format(Calendar.getInstance().time)
     }
 }

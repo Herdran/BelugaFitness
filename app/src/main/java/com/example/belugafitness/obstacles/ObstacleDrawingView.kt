@@ -6,7 +6,7 @@ import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.View
 
-class ObstacleDrawingView @JvmOverloads constructor(
+class ObstacleDrawingView (
     context: Context,
     attrs: AttributeSet?,
 ) : View(context, attrs) {
@@ -21,8 +21,8 @@ class ObstacleDrawingView @JvmOverloads constructor(
     var obstacle: Obstacle? = RectangleFromTopObstacle(0.25f)
 
 
-    override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
+    override fun draw(canvas: Canvas) {
+        super.draw(canvas)
 
         val screenHeight = height.toFloat()
         val screenWidth = width.toFloat()

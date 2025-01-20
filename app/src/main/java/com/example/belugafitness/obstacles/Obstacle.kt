@@ -7,6 +7,7 @@ import com.example.belugafitness.posedetection.OverlayView
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
 
 interface Obstacle {
+    val obstacleTxt: String
     fun checkCondition(
         result: PoseLandmarkerResult,
         overlayView: OverlayView,

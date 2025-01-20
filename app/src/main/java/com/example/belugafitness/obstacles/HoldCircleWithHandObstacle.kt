@@ -33,6 +33,8 @@ class HoldCircleWithHandObstacle(private val xValue: Float = 0.25f, private val 
         "#88F4E7",
     )
 
+    override val obstacleTxt: String = "Hold the bubble with your hand"
+
     override fun checkCondition(
         result: PoseLandmarkerResult,
         overlayView: OverlayView,

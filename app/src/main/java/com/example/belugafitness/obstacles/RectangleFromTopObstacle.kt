@@ -10,6 +10,9 @@ import com.example.belugafitness.posedetection.OverlayView
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
 
 class RectangleFromTopObstacle(private val yValue: Float = 0.25f) : Obstacle {
+
+    override val obstacleTxt: String = "Avoid the crab"
+
     override fun checkCondition(
         result: PoseLandmarkerResult,
         overlayView: OverlayView,
