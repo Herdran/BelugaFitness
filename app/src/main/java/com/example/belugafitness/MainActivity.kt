@@ -16,9 +16,8 @@ class MainActivity : AppCompatActivity() {
     private val PREFS_NAME = "StreakPrefs"
     private val STREAK_KEY = "streak"
     private val LAST_DATE_KEY = "lastDate"
-
+    private var streakDoneToday: Boolean = false
     var streak: Int = 0
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,7 +40,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupStreak() {
         streakSetupHelper()
-
+        if (streakDoneToday) {
+//            change text color
+        }
         streakTextView.text = "Your current streak is: $streak days"
     }
 
@@ -55,6 +56,9 @@ class MainActivity : AppCompatActivity() {
 
         if (lastDate != today && !isYesterday(lastDate)) {
             streak = 0
+        }
+        else if (today == lastDate) {
+            streakDoneToday = true
         }
     }
 

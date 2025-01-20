@@ -69,7 +69,7 @@ class WorkoutActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerList
     private val LAST_DATE_KEY = "lastDate"
 
     private lateinit var streakTextView: TextView
-
+    private var streakDoneToday: Boolean = false
     var streak: Int = 0
 
 
@@ -334,9 +334,19 @@ class WorkoutActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerList
     fun streakSetupHelper() {
         val sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         streak = sharedPreferences.getInt(STREAK_KEY, 0)
+
+        val lastDate = sharedPreferences.getString(LAST_DATE_KEY, "")
+        val today = getCurrentDate()
+
+        if (today == lastDate) {
+            streakDoneToday = true
+        }
     }
 
     private fun updateStreakText() {
+        if (streakDoneToday) {
+//            change text color
+        }
         streakTextView.text = "Your current streak is: $streak days"
     }
 
