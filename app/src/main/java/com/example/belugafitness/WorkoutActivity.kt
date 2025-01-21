@@ -1,7 +1,14 @@
 package com.example.belugafitness
 
 import android.Manifest
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.content.Context
+import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.net.Uri
+import android.provider.Settings
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Bundle
@@ -10,6 +17,8 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
+import android.graphics.Color
+import android.graphics.PorterDuff
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -71,7 +80,7 @@ class WorkoutActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerList
     private lateinit var streakTextView: TextView
     private var streakDoneToday: Boolean = false
     var streak: Int = 0
-
+    private var summaryScreen: Boolean = false
 
     companion object {
         private const val TAG = "CameraXApp"
@@ -82,32 +91,38 @@ class WorkoutActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerList
             }.toTypedArray()
     }
 
-    private val activityResultLauncher =
-        registerForActivityResult(
-            ActivityResultContracts.RequestMultiplePermissions()
-        )
-        { permissions ->
-            var permissionGranted = true
-            permissions.entries.forEach {
-                if (it.key in REQUIRED_PERMISSIONS && !it.value)
-                    permissionGranted = false
-            }
-            if (!permissionGranted) {
-                Toast.makeText(
-                    this,
-                    "Permission request denied",
-                    Toast.LENGTH_SHORT
-                ).show()
-            } else {
+    private val requestMultiplePermissions =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            if (permissions.all { it.value }) {
                 startCamera()
+            } else {
+                for ((permission, granted) in permissions) {
+                    if (!granted) {
+                        if (shouldShowRequestPermissionRationale(permission)) {
+                            finish()
+                        } else {
+                            finish()
+                            guideUserToSettings()
+                        }
+                    }
+                }
             }
         }
+
+    private fun guideUserToSettings() {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.parse("package:${packageName}")
+        }
+        startActivity(intent)
+        Toast.makeText(this, "Camera permissions are required to proceed.", Toast.LENGTH_LONG).show()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_detection)
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
 
         viewFinder = findViewById(R.id.view_finder)
         overlayView = findViewById(R.id.overlay)
@@ -221,7 +236,7 @@ class WorkoutActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerList
     }
 
     private fun requestPermissions() {
-        activityResultLauncher.launch(REQUIRED_PERMISSIONS)
+        requestMultiplePermissions.launch(REQUIRED_PERMISSIONS)
     }
 
     private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
@@ -293,7 +308,8 @@ class WorkoutActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerList
                 if (obstacleId < workoutSection.obstaclesList.size - 1){
                     obstacleId++
                     obstacleDrawingView.obstacle = workoutSection.obstaclesList[obstacleId]
-                } else {
+                } else if (!summaryScreen) {
+                    summaryScreen = true
                     workoutSummaryLayout()
                 }
                 resultTxt.text = workoutSection.obstaclesList[obstacleId].obstacleTxt
@@ -311,6 +327,9 @@ class WorkoutActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerList
         stopCountdown()
         setContentView(R.layout.workout_summary)
         streakTextView = findViewById(R.id.streak_test_view)
+        if (!streakDoneToday) {
+            streak++
+        }
 
         val endWorkoutButton: Button = findViewById(R.id.button_ws)
         updateStreakText()
@@ -319,13 +338,11 @@ class WorkoutActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerList
             val sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
             if (currentDate != sharedPreferences.getString(LAST_DATE_KEY, "")) {
-                streak++
                 with(sharedPreferences.edit()) {
                     putInt(STREAK_KEY, streak)
                     putString(LAST_DATE_KEY, currentDate)
                     apply()
                 }
-                updateStreakText()
             }
             finish()
         }
@@ -344,10 +361,55 @@ class WorkoutActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerList
     }
 
     private fun updateStreakText() {
-        if (streakDoneToday) {
-//            change text color
+        if (!streakDoneToday) {
+            val leftDrawable = streakTextView.compoundDrawables[0]
+            streakTextView.setTextColor(Color.GRAY)
+            leftDrawable?.let {
+                it.setColorFilter(Color.GRAY, PorterDuff.Mode.SRC_IN)
+                streakTextView.setCompoundDrawablesWithIntrinsicBounds(it, null, null, null)
+            }
+            updateStreakAnimation(streakTextView, streak - 1, streak)
         }
-        streakTextView.text = "Your current streak is: $streak days"
+        streakTextView.text = "${streak}"
+
+    }
+
+    fun updateStreakAnimation(streakTextView: TextView, oldNumber: Int, newNumber: Int) {
+        Log.i("animation", "plays")
+        // Number Animation
+        val numberAnimator = ValueAnimator.ofInt(oldNumber, newNumber)
+        numberAnimator.duration = 600
+        numberAnimator.addUpdateListener { animation ->
+            val animatedValue = animation.animatedValue as Int
+            streakTextView.text = animatedValue.toString()
+        }
+
+        // Color Animations for Text and Drawable
+        val colorAnimator = ObjectAnimator.ofArgb(
+            streakTextView,
+            "textColor",
+            Color.GRAY,
+            Color.parseColor("#FFC107")
+        )
+        colorAnimator.duration = 300
+
+        val leftDrawable = streakTextView.compoundDrawables[0]
+        val drawableColorAnimator = ValueAnimator.ofArgb(Color.GRAY, Color.parseColor("#FFC107"))
+        drawableColorAnimator.duration = 300
+        drawableColorAnimator.addUpdateListener { animation ->
+            val colorValue = animation.animatedValue as Int
+            leftDrawable?.setColorFilter(colorValue, PorterDuff.Mode.SRC_IN)
+            streakTextView.setCompoundDrawablesWithIntrinsicBounds(leftDrawable, null, null, null)
+        }
+
+        // Combine Animations (First number, then color and drawable together)
+        val animatorSet = AnimatorSet()
+        animatorSet.playSequentially(numberAnimator, AnimatorSet().apply {
+            playTogether(colorAnimator, drawableColorAnimator)
+        })
+
+        animatorSet.start()
+
     }
 
     private fun getCurrentDate(): String {

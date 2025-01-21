@@ -2,6 +2,7 @@ package com.example.belugafitness
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
@@ -9,6 +10,9 @@ import androidx.appcompat.app.AppCompatActivity
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import android.graphics.Color
+import android.graphics.PorterDuff
+import android.util.Log
 
 class MainActivity : AppCompatActivity() {
 
@@ -23,7 +27,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main_screen)
         streakTextView = findViewById(R.id.streak_test_view_main)
-        setupStreak()
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
 
         val startDetectionButton: Button = findViewById(R.id.button2)
         startDetectionButton.setOnClickListener {
@@ -41,9 +45,22 @@ class MainActivity : AppCompatActivity() {
     private fun setupStreak() {
         streakSetupHelper()
         if (streakDoneToday) {
-//            change text color
+            val leftDrawable = streakTextView.compoundDrawables[0]
+            streakTextView.setTextColor(Color.parseColor("#FFC107"))
+            leftDrawable?.let {
+                it.clearColorFilter()
+                streakTextView.setCompoundDrawablesWithIntrinsicBounds(it, null, null, null)
+            }
+        } else {
+            val leftDrawable = streakTextView.compoundDrawables[0]
+            streakTextView.setTextColor(Color.GRAY)
+            leftDrawable?.let {
+                it.setColorFilter(Color.GRAY, PorterDuff.Mode.SRC_IN)
+                streakTextView.setCompoundDrawablesWithIntrinsicBounds(it, null, null, null)
+            }
+
         }
-        streakTextView.text = "Your current streak is: $streak days"
+        streakTextView.text = "$streak"
     }
 
     fun streakSetupHelper() {
@@ -56,9 +73,16 @@ class MainActivity : AppCompatActivity() {
 
         if (lastDate != today && !isYesterday(lastDate)) {
             streak = 0
+            with(sharedPreferences.edit()) {
+                putInt(STREAK_KEY, streak)
+                apply()
+            }
         }
         else if (today == lastDate) {
             streakDoneToday = true
+        }
+        else {
+            streakDoneToday = false
         }
     }
 
