@@ -28,7 +28,7 @@ class NotificationReceiver : BroadcastReceiver() {
         if (lastDate != currentDate) {
             val message: String
             if (streak == 0){
-                message = "The Beluga is waiting for you to workout together!!!"
+                message = "The Beluga is waiting for you to exercise together!!!"
             }
             else {
                 val notificationType = intent?.getStringExtra("notification_type")

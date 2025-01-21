@@ -20,6 +20,29 @@ class WorkoutSection {
         obstaclesFullList.add(HoldCircleWithHandObstacle(0.2f, 0.2f, 0.2f))
         obstaclesFullList.add(HoldCircleWithHandObstacle(0.4f, 0.2f, 0.2f))
         obstaclesFullList.add(HoldCircleWithHandObstacle(0.3f, 0.5f, 0.2f))
+
+        obstaclesFullList.add(HoldCirclesWithBothHandsObstacle(0.7f, 0.1f,
+            0.3f, 0.1f,0.2f))
+//        two hands down
+        obstaclesFullList.add(HoldCirclesWithBothHandsObstacle(0.7f, 0.6f,
+            0.3f, 0.6f,0.2f))
+//        two up
+        obstaclesFullList.add(HoldCirclesWithBothHandsObstacle(0.7f, 0.1f,
+            0.3f, 0.6f,0.2f))
+//        one up
+        obstaclesFullList.add(HoldCirclesWithBothHandsObstacle(0.7f, 0.6f,
+            0.3f, 0.1f,0.2f))
+//        other up
+
+
+
+        obstaclesFullList.add(HoldCirclesWithBothHandsObstacle(0.7f, 0.2f,
+            0.3f, 0.5f,0.2f))
+//        weird
+        obstaclesFullList.add(HoldCirclesWithBothHandsObstacle(0.2f, 0.2f,
+            0.3f, 0.5f,0.2f))
+//
+
     }
 
 

@@ -82,7 +82,7 @@ class HoldCircleWithHandObstacle(private val xValue: Float = 0.25f, private val 
             val solidDrawable = drawable.getDrawable(0) as GradientDrawable
             val newBubbleColor = Color.parseColor(bubbleColors[Random.nextInt(bubbleColors.size)])
             solidDrawable.setColor(newBubbleColor)
-            drawable.alpha = 170
+            drawable.alpha = 200
             drawable.setBounds((xPosition-radius).toInt(), (yPosition-radius).toInt(), (xPosition + radius).toInt(), (yPosition + radius).toInt())
             drawable.draw(canvas)
         }

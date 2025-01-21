@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#ECF5FA">
+    android:background="#FFFFFF">
 
     <TextView
         android:id="@+id/streak_test_view"
@@ -21,6 +21,25 @@
         android:textColor="#FFC107"
         android:textSize="48sp"
         app:layout_constraintBottom_toTopOf="@+id/button_ws"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.498"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/congratulations_test_view" />
+
+    <TextView
+        android:id="@+id/congratulations_test_view"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="32dp"
+        android:layout_marginTop="32dp"
+        android:layout_marginEnd="32dp"
+        android:fontFamily="sans-serif-medium"
+        android:shadowColor="#FFFFFF"
+        android:shadowRadius="20"
+        android:text="WELL DONE!"
+        android:textColor="#0B91CE"
+        android:textSize="48sp"
+        android:textAlignment="center"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.5"
         app:layout_constraintStart_toStartOf="parent"
@@ -39,14 +58,14 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.35" />
+        app:layout_constraintVertical_bias="0.5" />
 
     <ImageView
         android:id="@+id/imageViewSeaweedGreen"
         android:layout_width="386dp"
         android:layout_height="231dp"
-        android:layout_marginStart="-64dp"
-        android:layout_marginBottom="4dp"
+        android:layout_marginStart="-84dp"
+
         android:src="@drawable/seaweed_green"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -58,7 +77,6 @@
         android:layout_width="386dp"
         android:layout_height="231dp"
         android:layout_marginStart="128dp"
-        android:layout_marginBottom="4dp"
         android:src="@drawable/seaweed_green"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -69,8 +87,7 @@
         android:id="@+id/imageViewSeaweed"
         android:layout_width="386dp"
         android:layout_height="231dp"
-        android:layout_marginStart="-64dp"
-        android:layout_marginBottom="4dp"
+        android:layout_marginStart="-32dp"
         android:src="@drawable/seaweed_blue"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
